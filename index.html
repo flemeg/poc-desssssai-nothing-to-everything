@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investgram - Rede Social para Investidores</title>
+  
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    
+    .navbar-brand {
+      font-weight: bold;
+      color: #0d6efd !important;
+    }
+    
+    .post-card {
+      transition: transform 0.2s;
+      margin-bottom: 1.5rem;
+    }
+    
+    .post-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .company-badge {
+      font-size: 1.1rem;
+      padding: 0.5rem 1rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 8px;
+      display: inline-block;
+      margin: 0.5rem;
+    }
+    
+    .user-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+    
+    .comment-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 0.9rem;
+    }
+    
+    .like-btn {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .like-btn:hover {
+      transform: scale(1.1);
+    }
+    
+    .like-btn.liked {
+      color: #dc3545;
+    }
+    
+    .profile-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+    }
+    
+    .profile-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React, ReactDOM e Babel -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const API_URL = 'http://localhost:3001';
+
+    // Componente principal
+    function App() {
+      const [currentView, setCurrentView] = useState('feed');
+      const [currentUser, setCurrentUser] = useState(null);
+      const [selectedUserId, setSelectedUserId] = useState(null);
+      const [users, setUsers] = useState([]);
+
+      useEffect(() => {
+        loadUsers();
+      }, []);
+
+      const loadUsers = async () => {
+        const response = await fetch(`${API_URL}/users`);
+        const data = await response.json();
+        setUsers(data);
+        if (!currentUser && data.length > 0) {
+          setCurrentUser(data[0]);
+        }
+      };
+
+      const switchUser = (user) => {
+        setCurrentUser(user);
+        setCurrentView('feed');
+      };
+
+      const viewProfile = (userId) => {
+        setSelectedUserId(userId);
+        setCurrentView('profile');
+      };
+
+      return (
+        <>
+          <nav className="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+            <div className="container">
+              <a className="navbar-brand" href="#" onClick={() => setCurrentView('feed')}>
+                <i className="bi bi-graph-up-arrow"></i> Investgram
+              </a>
+              <div className="d-flex align-items-center gap-3">
+                <button 
+                  className="btn btn-outline-primary"
+                  onClick={() => setCurrentView('newUser')}
+                >
+                  <i className="bi bi-person-plus"></i> Novo Usuário
+                </button>
+                {currentUser && (
+                  <div className="dropdown">
+                    <button className="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                      {currentUser.name}
+                    </button>
+                    <ul className="dropdown-menu">
+                      {users.map(user => (
+                        <li key={user.id}>
+                          <a className="dropdown-item" href="#" onClick={() => switchUser(user)}>
+                            {user.name}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          </nav>
+
+          <div className="container">
+            {currentView === 'feed' && <Feed currentUser={currentUser} onViewProfile={viewProfile} />}
+            {currentView === 'profile' && <Profile userId={selectedUserId} onBack={() => setCurrentView('feed')} />}
+            {currentView === 'newUser' && <NewUserForm onUserCreated={(user) => {
+              setCurrentUser(user);
+              setCurrentView('feed');
+              loadUsers();
+            }} />}
+          </div>
+        </>
+      );
+    }
+
+    // Componente de Feed
+    function Feed({ currentUser, onViewProfile }) {
+      const [feed, setFeed] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        loadFeed();
+      }, []);
+
+      const loadFeed = async () => {
+        const response = await fetch(`${API_URL}/feed`);
+        const data = await response.json();
+        setFeed(data);
+        setLoading(false);
+      };
+
+      const handleLike = async (postId) => {
+        if (!currentUser) return;
+        
+        await fetch(`${API_URL}/posts/${postId}/like`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id })
+        });
+        
+        loadFeed();
+      };
+
+      const handleComment = async (postId, text) => {
+        if (!currentUser || !text.trim()) return;
+        
+        await fetch(`${API_URL}/posts/${postId}/comment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, text })
+        });
+        
+        loadFeed();
+      };
+
+      if (loading) {
+        return (
+          <div className="text-center py-5">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="row">
+          <div className="col-lg-8 mx-auto">
+            <h2 className="mb-4">
+              <i className="bi bi-newspaper"></i> Feed de Empresas
+            </h2>
+            
+            {feed.map(post => (
+              <Post 
+                key={post.id}
+                post={post}
+                currentUser={currentUser}
+                onLike={handleLike}
+                onComment={handleComment}
+                onViewProfile={onViewProfile}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Componente de Post
+    function Post({ post, currentUser, onLike, onComment, onViewProfile }) {
+      const [commentText, setCommentText] = useState('');
+      const [showComments, setShowComments] = useState(false);
+      
+      const isLiked = currentUser && post.likedBy.includes(currentUser.id);
+      const userInitials = post.user?.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+
+      const submitComment = (e) => {
+        e.preventDefault();
+        if (commentText.trim()) {
+          onComment(post.id, commentText);
+          setCommentText('');
+        }
+      };
+
+      return (
+        <div className="card post-card">
+          <div className="card-body">
+            <div className="d-flex align-items-center mb-3">
+              <div className="user-avatar me-3">
+                {userInitials}
+              </div>
+              <div>
+                <h6 className="mb-0">
+                  <a 
+                    href="#" 
+                    className="text-decoration-none"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onViewProfile(post.user.id);
+                    }}
+                  >
+                    {post.user?.name}
+                  </a>
+                </h6>
+                <small className="text-muted">
+                  {new Date(post.createdAt).toLocaleDateString('pt-BR')}
+                </small>
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <span className="company-badge">
+                <i className="bi bi-building"></i> {post.company}
+              </span>
+            </div>
+
+            <div className="d-flex gap-3 mb-3">
+              <button 
+                className={`btn btn-sm like-btn ${isLiked ? 'liked' : ''}`}
+                onClick={() => onLike(post.id)}
+                disabled={!currentUser}
+              >
+                <i className={`bi ${isLiked ? 'bi-heart-fill' : 'bi-heart'}`}></i> 
+                {post.likes} {post.likes === 1 ? 'Like' : 'Likes'}
+              </button>
+              
+              <button 
+                className="btn btn-sm"
+                onClick={() => setShowComments(!showComments)}
+              >
+                <i className="bi bi-chat"></i> 
+                {post.comments.length} {post.comments.length === 1 ? 'Comentário' : 'Comentários'}
+              </button>
+            </div>
+
+            {showComments && (
+              <div className="border-top pt-3">
+                {post.comments.map(comment => {
+                  const commentInitials = comment.user?.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+                  return (
+                    <div key={comment.id} className="d-flex mb-3">
+                      <div className="comment-avatar me-2">
+                        {commentInitials}
+                      </div>
+                      <div className="flex-grow-1">
+                        <div className="bg-light p-2 rounded">
+                          <strong className="d-block mb-1">
+                            <a 
+                              href="#" 
+                              className="text-decoration-none text-dark"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                onViewProfile(comment.user.id);
+                              }}
+                            >
+                              {comment.user?.name}
+                            </a>
+                          </strong>
+                          <p className="mb-0">{comment.text}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {currentUser && (
+                  <form onSubmit={submitComment} className="mt-3">
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Escreva um comentário..."
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                      />
+                      <button className="btn btn-primary" type="submit">
+                        <i className="bi bi-send"></i>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Componente de Perfil
+    function Profile({ userId, onBack }) {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        loadUser();
+      }, [userId]);
+
+      const loadUser = async () => {
+        const response = await fetch(`${API_URL}/users/${userId}`);
+        const data = await response.json();
+        setUser(data);
+        setLoading(false);
+      };
+
+      if (loading) {
+        return <div className="text-center py-5"><div className="spinner-border"></div></div>;
+      }
+
+      const userInitials = user?.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+
+      return (
+        <div className="row">
+          <div className="col-lg-8 mx-auto">
+            <button className="btn btn-link mb-3" onClick={onBack}>
+              <i className="bi bi-arrow-left"></i> Voltar ao Feed
+            </button>
+
+            <div className="profile-header">
+              <div className="profile-avatar">
+                {userInitials}
+              </div>
+              <h2>{user?.name}</h2>
+              <p className="mb-0">
+                <i className="bi bi-envelope"></i> {user?.email}
+              </p>
+            </div>
+
+            <div className="card">
+              <div className="card-body">
+                <h5 className="card-title mb-3">
+                  <i className="bi bi-star"></i> Empresas Favoritas
+                </h5>
+                <div className="d-flex flex-wrap">
+                  {user?.companies.map((company, index) => (
+                    <span key={index} className="company-badge">
+                      <i className="bi bi-building"></i> {company}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Componente de Novo Usuário
+    function NewUserForm({ onUserCreated }) {
+      const [name, setName] = useState('');
+      const [email, setEmail] = useState('');
+      const [companyInput, setCompanyInput] = useState('');
+      const [companies, setCompanies] = useState([]);
+
+      const addCompany = () => {
+        if (companyInput.trim() && !companies.includes(companyInput.trim())) {
+          setCompanies([...companies, companyInput.trim()]);
+          setCompanyInput('');
+        }
+      };
+
+      const removeCompany = (company) => {
+        setCompanies(companies.filter(c => c !== company));
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        const response = await fetch(`${API_URL}/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, companies })
+        });
+
+        const newUser = await response.json();
+        onUserCreated(newUser);
+      };
+
+      return (
+        <div className="row">
+          <div className="col-lg-6 mx-auto">
+            <div className="card">
+              <div className="card-body">
+                <h3 className="card-title mb-4">
+                  <i className="bi bi-person-plus"></i> Criar Novo Usuário
+                </h3>
+
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-3">
+                    <label className="form-label">Nome</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Email</label>
+                    <input
+                      type="email"
+                      className="form-control"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Empresas Favoritas</label>
+                    <div className="input-group mb-2">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Digite o nome da empresa"
+                        value={companyInput}
+                        onChange={(e) => setCompanyInput(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCompany())}
+                      />
+                      <button 
+                        className="btn btn-outline-primary" 
+                        type="button"
+                        onClick={addCompany}
+                      >
+                        <i className="bi bi-plus-lg"></i> Adicionar
+                      </button>
+                    </div>
+                    
+                    <div className="d-flex flex-wrap gap-2">
+                      {companies.map((company, index) => (
+                        <span key={index} className="badge bg-primary d-flex align-items-center gap-2">
+                          {company}
+                          <i 
+                            className="bi bi-x-circle" 
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => removeCompany(company)}
+                          ></i>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button type="submit" className="btn btn-primary w-100">
+                    <i className="bi bi-check-lg"></i> Criar Usuário
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Renderizar App
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
